@@ -1,0 +1,1404 @@
+```{r}
+
+devtools::install_github("thomasp85/patchwork")
+
+```
+
+
+```{r}
+library(nnet) #install if necessary
+library(sp)
+library(rgdal)
+library(hydroGOF)
+library(remotes)
+#install.packages('Rtools')
+#install.packages('RSNNS')
+library(RSNNS)
+library(stcor)
+source("starima_package.R")
+library(reshape2)
+#install.packages('formattable')
+library(formattable)
+library(ggplot2)
+library(quantmod)
+library(gridExtra)
+library(devtools)
+library(patchwork)
+```
+
+```{r}
+setwd('C://Users/wajir/Documents/class/spatial_temporal_data_analysis_and_data_mining/CW')
+```
+
+```{r}
+#read and prepare spacial weight matrics
+set.seed(1234)
+aus.fire<-read.csv('burnt_area_states_updated.csv')
+space_weight <- read.csv('space_weight2.csv')
+#is.numeric(aus.fire)
+rownames(aus.fire) <- aus.fire[,"X"]
+rownames(space_weight) <- space_weight[,"X"]
+aus.fire <- aus.fire[,-1]
+space_weight <- space_weight[,-1]
+space_weight <- apply(space_weight, c(1,2),as.numeric)
+name_col <-data.matrix (colnames(aus.fire))
+aus.firet <- t(as.matrix(aus.fire))
+is.numeric(aus.firet)
+is.numeric(space_weight)
+colnames(aus.firet)
+
+
+```
+
+```{r}
+png("acf_pacf.png",height=960, width=1500, res=144)
+par(mfrow= c(2,1))
+stacf(aus.firet, space_weight, 48)
+#aus.firet.diff <- diff(aus.firet,lag=12,differences=1)
+#aus.firet.diff
+#stacf(aus.firet.diff,space_weight,48)
+stpacf(aus.firet,space_weight,48)
+#stpacf(aus.firet.diff,space_weight,48)
+```
+```{r}
+set.seed(1234)
+aus.fire<-read.csv('burnt_area_states_updated.csv')
+is.numeric(aus.fire)
+rownames(aus.fire) <- aus.fire[,"X"]
+aus.fire <- aus.fire[,-1]
+name_col <-data.matrix (colnames(aus.fire))
+
+X <- t(as.matrix(aus.fire))
+X <-apply(X, c(1,2),as.numeric)
+is.numeric(X)
+y1<- X[2:230,]
+y2<- X[3:230,]
+y3<- X[4:230,]
+y12 <- X[13:230,]
+is.numeric(y1)
+
+
+minus=1
+fire.nnet1 <- nnet(X[1:182, 1:7], y1[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred1<-predict(fire.nnet1, X[183:230, 1:7])
+length(fire.nnet1$fitted.values[,1])
+length(fire.pred1[,1])
+matplot(cbind(y1[183:230-minus,1], fire.pred1[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+minus = 2
+fire.nnet2 <- nnet(X[1:182, 1:7], y2[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred2<-predict(fire.nnet2, X[183:230, 1:7])
+fire.pred2[,1]
+matplot(cbind(y2[183:230-minus,1], fire.pred2[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+minus = 3
+fire.nnet3 <- nnet(X[1:182, 1:7], y3[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred3<-predict(fire.nnet3, X[183:230, 1:7])
+fire.pred3[,1]
+matplot(cbind(y3[183:230-minus,1], fire.pred3[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+minus = 12
+fire.nnet12 <- nnet(X[1:182, 1:7], y12[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred12<-predict(fire.nnet12, X[183:230, 1:7])
+fire.pred12[,1]
+matplot(cbind(y12[183:230-minus,1], fire.pred12[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+```
+
+only time series
+```{r}
+for (i in 1:7){
+
+slog<- as.ts(X[,i])
+train <- 1:182
+y<- as.zoo(slog)
+y<-as.zoo(slog)
+x1<-Lag(y,k=1)
+x2<-Lag(y,k=2)
+x3<-Lag(y,k=3)
+x4<-Lag(y,k=4)
+x5<-Lag(y,k=5)
+x6<-Lag(y,k=6)
+x7<-Lag(y,k=7)
+x8<-Lag(y,k=8)
+x9<-Lag(y,k=9)
+x10<-Lag(y,k=10)
+x11<-Lag(y,k=11)
+x12<-Lag(y,k=12)
+slog<-cbind(y,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12)
+
+slog<-slog[-(1:12),]
+inputs<-slog[,2:13]
+outputs<-slog[,1]
+
+for (j in 1:7){
+fitt = paste('fitelmant',i,'_',j,'<-elman(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitelmant',i,sep="")
+fitname<-try(eval(parse(text=fitn))) 
+ 
+plotIterativeError(fitname)
+y<-as.vector(outputs[-train])
+plot(y,type="l")
+pred<-predict(fitname,inputs[-train])
+lines(pred,col="red")
+
+
+fitt = paste('fitjordant',i,'_',j,'<-jordan(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitjordant',i,sep="")
+fitname<-try(eval(parse(text=fitn))) 
+
+pred<-predict(fitname,inputs[-train])
+plot(y,type="l")
+lines(pred,col="red")
+}
+  
+  
+}
+```
+
+spatial time analysis k=12
+```{r}
+set.seed(1234)
+slogall<- as.ts(X)
+yay <- as.zoo(slogall)
+
+slog<- as.ts(X[,1])
+yy<-as.zoo(slog)
+train <- 1:182
+
+for(i in 1:7){
+
+slog<- as.ts(X[,i])
+y<- as.zoo(slog)
+
+x1<-Lag(y,k=1)
+x2<-Lag(y,k=2)
+x3<-Lag(y,k=3)
+x4<-Lag(y,k=4)
+x5<-Lag(y,k=5)
+x6<-Lag(y,k=6)
+x7<-Lag(y,k=7)
+x8<-Lag(y,k=8)
+x9<-Lag(y,k=9)
+x10<-Lag(y,k=10)
+x11<-Lag(y,k=11)
+x12<-Lag(y,k=12)
+
+yy<-cbind(yy,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12)
+}
+
+yy <- yy[-(1:12),]
+y <- yay[-(1:12),]
+inputs <- yy[,2:85]
+train <- 1:182
+result_df_12 <- data.frame(matrix(nrow = 21, ncol = 7))
+result_df_12p <- data.frame(matrix(nrow = 21, ncol = 7))
+result_df_difference_12 <- data.frame(matrix(nrow = 21, ncol = 7))
+namerows <- c()
+oddnb <-c(1,3,5,7,9,11,13)
+
+for (i in 1:7){#state number
+outputs <- y[,i]
+  
+for (j in 1:7){#hidden layer number
+nnetnb<-0
+elmannb<-7
+jordannb<-14
+
+#nnet
+fitt = paste('fitnnet',j,'_',i,'_st<-nnet(inputs[train],outputs[train], decay=5e-6, linout = TRUE, size=',j,')',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitnnet',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[nnetnb+j] <- paste('nnet',j,sep="")
+
+#res<-as.vector(outputs[-train])
+#plot(res,type="l")
+pred<-predict(fitname,inputs[-train])
+#lines(pred,col="red")
+
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_12[nnetnb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_12p[nnetnb+j,i]=pre_nmse
+result_df_difference_12[nnetnb+j,i]<- fit_nmse-pre_nmse
+
+#elman
+fitt = paste('fitelman',j,'_',i,'_st<-elman(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitelman',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[elmannb+j] <- paste('elman',j,sep="")
+
+#plotIterativeError(fitname)
+#res<-as.vector(outputs[-train])
+#plot(res,type="l")
+pred<-predict(fitname,inputs[-train])
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_12[elmannb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_12p[elmannb+j,i]=pre_nmse
+result_df_difference_12[elmannb+j,i]<- fit_nmse-pre_nmse
+
+#jordan
+fitt = paste('fitjordan',j,'_',i,'_st<-jordan(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitjordan',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[jordannb+j] <- paste('jordan',j,sep="")
+
+pred<-predict(fitname,inputs[-train])
+#plot(res,type="l")
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_12[jordannb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_12p[jordannb+j,i]=pre_nmse
+result_df_difference_12[jordannb+j,i]<- fit_nmse-pre_nmse
+}
+}
+
+
+```
+
+
+```{r}
+colnames(result_df_12) <- colnames(X)
+rownames(result_df_12) <- namerows
+#c('NT_fit','NT_pre','Q_fit', 'Q_pre', 'SA_fit','SA_pre','T_fit', 'T_pre', 'V_fit', 'V_pre','WA_fit','WA_pre','NSW_fit','NSW_pre')
+
+
+final_result <- c()
+for (i in 1:7){
+  
+  fr <- paste('rownames(result_df_12)[which(result_df_12[,',i,'] == min(result_df_12[,',i,']))]',sep="")
+  final_result[i] <-try(eval(parse(text=fr)))
+}
+final_result
+result_df_f12 <- rbind(result_df_12, final_result)
+rownames(result_df_f12)[22]<- c("final result")
+
+
+#miin<- min(result_df_f12[,i])
+formattable(result_df_f12,list('NT'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,1]),"tomato","gray"))),
+                                'Q'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,2]),"tomato","gray"))),
+                                'SA'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,3]),"tomato","gray"))),
+                                'T'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,4]),"tomato","gray"))),
+                                'V'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,5]),"tomato","gray"))),
+                                'WA'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,6]),"tomato","gray"))),
+                                'NSW'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f12[,7]),"tomato","gray")))
+                                ))
+
+
+```
+
+```{r}
+
+for (i in 1:7){
+#make a table fitted and test
+#call fit variable by for loop
+namevar <- final_result[i]
+fi <- paste('fit',namevar,'_',i,'_st',sep="")
+fitresult <-try(eval(parse(text=fi)))
+
+#make a prediction again here
+pred<-predict(fitresult,inputs[-train])
+fitpre_all<-rbind(fitresult$fitted.values,pred)
+
+#bind real and fit and prediction 
+real <- as.matrix(y[,i])
+fitpre_real<-cbind(real, fitpre_all)
+colnames(fitpre_real)<- c('real', 'model')
+
+#prepare for plot
+all_line <- melt(fitpre_real)
+colnames(all_line)<- c('year','legend', 'Monthly_forest_fire_pixcel')
+ymax<-max(fitpre_real)
+rects <- data.frame(xstart = c(195), xend = c(230), col = letters[1])
+
+#NRMSE
+y_test<- as.matrix(real[-train])
+y_train<- as.matrix(real[train])
+
+m_train <-fitresult$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+
+nmse = as.data.frame(c(fit_nmse, pre_nmse))
+rownames(nmse)<- c('Fit', 'Test')
+colnames(nmse)<- c('NMSE')
+
+
+#set png name
+wwr = paste('"k12',namevar,colnames(y1)[i],'.png"',sep="")
+replac<-try(eval(parse(text=wwr))) 
+replac
+
+#set plot title
+plottitle = paste(namevar,colnames(y1)[i],sep="")
+
+#set x axis scale
+mylist <- c(2)
+for (mmm in 1:19){
+  mylist[1+mmm]<- 2+12*mmm
+}
+mylist
+
+#make a plot for the data
+gl<-ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_line(data = all_line, aes(x = year, y = Monthly_forest_fire_pixcel, col=legend)) +
+    ggtitle(plottitle) +
+    xlab("year")+ ylab("Monthly forest fire pixcel")+
+    scale_color_manual(values = c("#00001c", "#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c('',2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+
+#prepare a plot of residuals 
+fitres<-fitresult$residuals
+predres<-pred-real[-train]
+all_resi<-rbind(fitres,predres)
+all_residuals <- melt(all_resi)
+colnames(all_residuals)<- c('year', 'legend','model_residuals')
+ymax <- max(all_residuals[,3])
+
+#plot a residual points
+
+gr<-ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_point(data = all_residuals, aes(x = year, y = model_residuals, col=model_residuals),alpha = 0.7) +
+    #ggtitle(plottitle) +
+    xlab("year")+ ylab("Residuals")+
+    scale_color_gradient2(low = 'blue', mid = 'black', high = 'red')+
+    #guides(color = FALSE)+
+    #scale_color_manual(values = c("#00001c","#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c('',2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+
+#plot a histogram of residual
+gh<-ggplot(all_residuals,aes(x=model_residuals)) + geom_histogram()
+
+
+#layout the graphs
+
+gl + gridExtra::tableGrob(nmse) + gr + gh + 
+  plot_layout(widths = c(3, 1))
+
+#save png
+ggsave(replac,dpi = 250, width = 10, height = 4)
+}
+
+
+```
+
+```{r}
+    NT = color_tile("tomato","transparent"),
+    Q = color_tile("tomato","transparent"),
+    SA = color_tile("tomato","transparent"),
+    T = color_tile("tomato","transparent"),
+    V = color_tile("tomato","transparent"),
+    WA = color_tile("tomato","transparent"),
+    NSW = color_tile("tomato","transparent")))
+```
+
+spatial time analysis k=2
+```{r}
+set.seed(1234)
+slogall<- as.ts(X)
+yay <- as.zoo(slogall)
+
+slog<- as.ts(X[,1])
+yy<-as.zoo(slog)
+train <- 1:182
+
+for(i in 1:7){
+
+slog<- as.ts(X[,i])
+y<- as.zoo(slog)
+
+x1<-Lag(y,k=1)
+x2<-Lag(y,k=2)
+
+yy<-cbind(yy,x1,x2)
+}
+
+yy <- yy[-(1:12),]
+y <- yay[-(1:12),]
+inputs <- yy[,2:15]
+train <- 1:182
+result_df_2 <- data.frame(matrix(nrow = 21, ncol = 7))
+result_df_2p <- data.frame(matrix(nrow = 21, ncol = 7))
+result_df_difference_2 <- data.frame(matrix(nrow = 21, ncol = 14))
+namerows <- c()
+oddnb <-c(1,3,5,7,9,11,13)
+
+for (i in 1:7){
+outputs <- y[,i]
+  
+for (j in 1:7){
+nnetnb<-0
+elmannb<-7
+jordannb<-14
+
+#nnet
+fitt = paste('fitnnet',j,'_',i,'_st<-nnet(inputs[train],outputs[train], decay=5e-6, linout = TRUE, size=',j,')',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitnnet',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[nnetnb+j] <- paste('nnet',j,sep="")
+
+#res<-as.vector(outputs[-train])
+#plot(res,type="l")
+pred<-predict(fitname,inputs[-train])
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_2[nnetnb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_2p[nnetnb+j,i]=pre_nmse
+result_df_difference_12[nnetnb+j,i]<- fit_nmse-pre_nmse
+
+#elman
+fitt = paste('fitelman',j,'_',i,'_st<-elman(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitelman',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[elmannb+j] <- paste('elman',j,sep="")
+
+#plotIterativeError(fitname)
+#res<-as.vector(outputs[-train])
+#plot(res,type="l")
+pred<-predict(fitname,inputs[-train])
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_2[elmannb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_2p[elmannb+j,i]=pre_nmse
+result_df_difference_12[elmannb+j,i]<- fit_nmse-pre_nmse
+
+#jordan
+fitt = paste('fitjordan',j,'_',i,'_st<-jordan(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitjordan',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[jordannb+j] <- paste('jordan',j,sep="")
+
+pred<-predict(fitname,inputs[-train])
+#plot(res,type="l")
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_2[jordannb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_2p[jordannb+j,i]=pre_nmse
+result_df_difference_12[jordannb+j,i]<- fit_nmse-pre_nmse
+}
+}
+
+
+```
+```{r}
+colnames(result_df_2) <- colnames(X) 
+rownames(result_df_2) <- namerows
+#c('NT_fit','NT_pre','Q_fit', 'Q_pre', 'SA_fit','SA_pre','T_fit', 'T_pre', 'V_fit', 'V_pre','WA_fit','WA_pre','NSW_fit','NSW_pre')
+final_result <- c()
+for (i in 1:14){
+  
+  fr <- paste('rownames(result_df_2)[which(result_df_2[,',i,'] == min(result_df_2[,',i,']))]',sep="")
+  final_result[i] <-try(eval(parse(text=fr)))
+}
+final_result
+result_df_f2 <- rbind(result_df_2, final_result)
+rownames(result_df_f2)[22]<- c("final result")
+
+
+#miin<- min(result_df_f2[,i])
+formattable(result_df_f2,list('NT'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,1]),"tomato","gray"))),
+                                'Q'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,2]),"tomato","gray"))),
+                                'SA'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,3]),"tomato","gray"))),
+                                'T'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,4]),"tomato","gray"))),
+                                'V'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,5]),"tomato","gray"))),
+                                'WA'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,6]),"tomato","gray"))),
+                                'NSW'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f2[,7]),"tomato","gray")))
+                                ))
+
+
+```
+```{r}
+for (i in 1:7){
+#make a table fitted and test
+#call fit variable by for loop
+namevar <- final_result[i]
+fi <- paste('fit',namevar,'_',i,'_st',sep="")
+fitresult <-try(eval(parse(text=fi)))
+
+#make a prediction again here
+pred<-predict(fitresult,inputs[-train])
+fitpre_all<-rbind(fitresult$fitted.values,pred)
+
+#bind real and fit and prediction 
+real <- as.matrix(y[,i])
+fitpre_real<-cbind(real, fitpre_all)
+colnames(fitpre_real)<- c('real', 'model')
+
+#prepare for plot
+all_line <- melt(fitpre_real)
+colnames(all_line)<- c('year','legend', 'Monthly_forest_fire_pixcel')
+ymax<-max(fitpre_real)
+rects <- data.frame(xstart = c(195), xend = c(230), col = letters[1])
+
+#NRMSE
+y_test<- as.matrix(real[-train])
+y_train<- as.matrix(real[train])
+
+m_train <-fitresult$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+
+nmse = as.data.frame(c(fit_nmse, pre_nmse))
+rownames(nmse)<- c('Fit', 'Test')
+colnames(nmse)<- c('NMSE')
+
+
+#set png name
+wwr = paste('"k2',namevar,colnames(y1)[i],'.png"',sep="")
+replac<-try(eval(parse(text=wwr))) 
+replac
+
+#set plot title
+plottitle = paste(namevar,colnames(y1)[i],sep="")
+
+#set x axis scale
+mylist <- c(2)
+for (mmm in 1:19){
+  mylist[1+mmm]<- 2+12*mmm
+}
+mylist
+
+#make a plot for the data
+gl<-ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_line(data = all_line, aes(x = year, y = Monthly_forest_fire_pixcel, col=legend)) +
+    ggtitle(plottitle) +
+    xlab("year")+ ylab("Monthly forest fire pixcel")+
+    scale_color_manual(values = c("#00001c", "#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c('',2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+
+#prepare a plot of residuals 
+fitres<-fitresult$residuals
+predres<-pred-real[-train]
+all_resi<-rbind(fitres,predres)
+all_residuals <- melt(all_resi)
+colnames(all_residuals)<- c('year', 'legend','model_residuals')
+ymax <- max(all_residuals[,3])
+
+#plot a residual points
+
+gr<-ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_point(data = all_residuals, aes(x = year, y = model_residuals, col=model_residuals),alpha = 0.7) +
+    #ggtitle(plottitle) +
+    xlab("year")+ ylab("Residuals")+
+    scale_color_gradient2(low = 'blue', mid = 'black', high = 'red')+
+    #guides(color = FALSE)+
+    #scale_color_manual(values = c("#00001c","#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c('',2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+
+#plot a histogram of residual
+gh<-ggplot(all_residuals,aes(x=model_residuals)) + geom_histogram()
+
+
+#layout the graphs
+
+gl + gridExtra::tableGrob(nmse) + gr + gh + 
+  plot_layout(widths = c(3, 1))
+
+#save png
+ggsave(replac,dpi = 250, width = 10, height = 4)
+}
+```
+
+spatial time analysis k=1
+```{r}
+set.seed(1234)
+slogall<- as.ts(X)
+yay <- as.zoo(slogall)
+
+slog<- as.ts(X[,1])
+yy<-as.zoo(slog)
+train <- 1:182
+
+for(i in 1:7){
+
+slog<- as.ts(X[,i])
+y<- as.zoo(slog)
+
+x1<-Lag(y,k=1)
+
+yy<-cbind(yy,x1)
+}
+
+yy <- yy[-(1:12),]
+y <- yay[-(1:12),]
+inputs <- yy[,2:8]
+train <- 1:182
+result_df_1 <- data.frame(matrix(nrow = 21, ncol = 7))
+result_df_1p <- data.frame(matrix(nrow = 21, ncol = 7))
+result_df_difference_1 <- data.frame(matrix(nrow = 21, ncol = 14))
+namerows <- c()
+oddnb <-c(1,3,5,7,9,11,13)
+
+for (i in 1:7){
+outputs <- y[,i]
+  
+for (j in 1:7){
+nnetnb<-0
+elmannb<-7
+jordannb<-14
+
+#nnet
+fitt = paste('fitnnet',j,'_',i,'_st<-nnet(inputs[train],outputs[train], decay=5e-6, linout = TRUE, size=',j,')',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitnnet',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[nnetnb+j] <- paste('nnet',j,sep="")
+
+#res<-as.vector(outputs[-train])
+#plot(res,type="l")
+pred<-predict(fitname,inputs[-train])
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_1[nnetnb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_1p[nnetnb+j,i]=pre_nmse
+result_df_difference_1[nnetnb+j,i]<- fit_nmse-pre_nmse
+
+#elman
+fitt = paste('fitelman',j,'_',i,'_st<-elman(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitelman',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[elmannb+j] <- paste('elman',j,sep="")
+
+#plotIterativeError(fitname)
+#res<-as.vector(outputs[-train])
+#plot(res,type="l")
+pred<-predict(fitname,inputs[-train])
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_1[elmannb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_1p[elmannb+j,i]=pre_nmse
+result_df_difference_1[elmannb+j,i]<- fit_nmse-pre_nmse
+
+#jordan
+fitt = paste('fitjordan',j,'_',i,'_st<-jordan(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitjordan',j,'_',i,'_st',sep="")
+fitname<-try(eval(parse(text=fitn)))
+namerows[jordannb+j] <- paste('jordan',j,sep="")
+
+pred<-predict(fitname,inputs[-train])
+#plot(res,type="l")
+#lines(pred,col="red")
+y_train<- as.matrix(outputs[train])
+y_test<- as.matrix(outputs[-train])
+
+m_train <- fitname$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+result_df_1[jordannb+j,i]=fit_nmse
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+result_df_1p[jordannb+j,i]=pre_nmse
+result_df_difference_1[jordannb+j,i]<- fit_nmse-pre_nmse
+}
+}
+
+
+```
+```{r}
+colnames(result_df_1) <- colnames(X) 
+rownames(result_df_1) <- namerows
+#c('NT_fit','NT_pre','Q_fit', 'Q_pre', 'SA_fit','SA_pre','T_fit', 'T_pre', 'V_fit', 'V_pre','WA_fit','WA_pre','NSW_fit','NSW_pre')
+final_result <- c()
+for (i in 1:7){
+  
+  fr <- paste('rownames(result_df_1)[which(result_df_1[,',i,'] == min(result_df_1[,',i,']))]',sep="")
+  final_result[i] <-try(eval(parse(text=fr)))
+}
+final_result
+result_df_f1 <- rbind(result_df_1, final_result)
+rownames(result_df_f1)[22]<- c("final result")
+
+
+#miin<- min(result_df_f2[,i])
+formattable(result_df_f1,list('NT'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,1]),"tomato","gray"))),
+                                'Q'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,2]),"tomato","gray"))),
+                                'SA'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,3]),"tomato","gray"))),
+                                'T'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,4]),"tomato","gray"))),
+                                'V'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,5]),"tomato","gray"))),
+                                'WA'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,6]),"tomato","gray"))),
+                                'NSW'=formatter("span",style=x~style(color=ifelse(x==min(result_df_f1[,7]),"tomato","gray")))
+                                ))
+
+
+```
+
+make line graphs for fitted and test data
+make residual graphs for fitted and test data
+
+```{r}
+
+for (i in 1:7){
+#make a table fitted and test
+#call fit variable by for loop
+namevar <- final_result[i]
+fi <- paste('fit',namevar,'_',i,'_st',sep="")
+fitresult <-try(eval(parse(text=fi)))
+
+#make a prediction again here
+pred<-predict(fitresult,inputs[-train])
+fitpre_all<-rbind(fitresult$fitted.values,pred)
+
+#bind real and fit and prediction 
+real <- as.matrix(y[,i])
+fitpre_real<-cbind(real, fitpre_all)
+colnames(fitpre_real)<- c('real', 'model')
+
+#prepare for plot
+all_line <- melt(fitpre_real)
+colnames(all_line)<- c('year','legend', 'Monthly_forest_fire_pixcel')
+ymax<-max(fitpre_real)
+rects <- data.frame(xstart = c(195), xend = c(230), col = letters[1])
+
+#NRMSE
+y_test<- as.matrix(real[-train])
+y_train<- as.matrix(real[train])
+
+m_train <-fitresult$fitted.values
+m_test <- pred
+
+fit_nmse = round(sum((y_train-m_train)^2)/((sd(y_train)^2)*length(y_train)), 2)
+pre_nmse = round(sum((y_test-m_test)^2)/((sd(y_test)^2)*length(y_test)),2)
+
+nmse = as.data.frame(c(fit_nmse, pre_nmse))
+rownames(nmse)<- c('Fit', 'Test')
+colnames(nmse)<- c('NMSE')
+
+
+#set png name
+wwr = paste('"k1',namevar,colnames(y1)[i],'.png"',sep="")
+replac<-try(eval(parse(text=wwr))) 
+replac
+
+#set plot title
+plottitle = paste(namevar,colnames(y1)[i],sep="")
+
+#set x axis scale
+mylist <- c(2)
+for (mmm in 1:19){
+  mylist[1+mmm]<- 2+12*mmm
+}
+mylist
+
+#make a plot for the data
+gl<-ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_line(data = all_line, aes(x = year, y = Monthly_forest_fire_pixcel, col=legend)) +
+    ggtitle(plottitle) +
+    xlab("year")+ ylab("Monthly forest fire pixcel")+
+    scale_color_manual(values = c("#00001c", "#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c('',2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+
+#prepare a plot of residuals 
+fitres<-fitresult$residuals
+predres<-pred-real[-train]
+all_resi<-rbind(fitres,predres)
+all_residuals <- melt(all_resi)
+colnames(all_residuals)<- c('year', 'legend','model_residuals')
+ymax <- max(all_residuals[,3])
+
+#plot a residual points
+
+gr<-ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_point(data = all_residuals, aes(x = year, y = model_residuals, col=model_residuals),alpha = 0.7) +
+    #ggtitle(plottitle) +
+    xlab("year")+ ylab("Residuals")+
+    scale_color_gradient2(low = 'blue', mid = 'black', high = 'red')+
+    #guides(color = FALSE)+
+    #scale_color_manual(values = c("#00001c","#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c('',2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+
+#plot a histogram of residual
+gh<-ggplot(all_residuals,aes(x=model_residuals)) + geom_histogram()
+
+
+#layout the graphs
+
+gl + gridExtra::tableGrob(nmse) + gr + gh + 
+  plot_layout(widths = c(3, 1))
+
+#save png
+ggsave(replac,dpi = 250, width = 10, height = 4)
+}
+```
+
+
+
+
+```{r}
+for (i in 1:7){
+
+slog<- as.ts(X[,i])
+train <- 1:182
+y<- as.zoo(slog)
+x1<-Lag(y,k=1)
+x2<-Lag(y,k=2)
+x3<-Lag(y,k=3)
+x4<-Lag(y,k=4)
+x5<-Lag(y,k=5)
+x6<-Lag(y,k=6)
+x7<-Lag(y,k=7)
+x8<-Lag(y,k=8)
+x9<-Lag(y,k=9)
+x10<-Lag(y,k=10)
+x11<-Lag(y,k=11)
+x12<-Lag(y,k=12)
+slog<-cbind(y,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12)
+
+slog<-slog[-(1:12),]
+inputs<-slog[,2:13]
+outputs<-slog[,1]
+
+for (j in 1:7){
+fitt = paste('fitelman',i,'_',j,'<-elman(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitelman',i,sep="")
+fitname<-try(eval(parse(text=fitn))) 
+ 
+plotIterativeError(fitname)
+y<-as.vector(outputs[-train])
+plot(y,type="l")
+pred<-predict(fitname,inputs[-train])
+lines(pred,col="red")
+
+
+fitt = paste('fitjordan',i,'_',j,'<-jordan(inputs[train],outputs[train],size=c(',j,'),learnFuncParams=c(0.1),maxit=5000)',sep="")
+try(eval(parse(text=fitt)))
+fitn = paste('fitjordan',i,sep="")
+fitname<-try(eval(parse(text=fitn))) 
+
+pred<-predict(fitname,inputs[-train])
+plot(y,type="l")
+lines(pred,col="red")
+}
+  
+  
+}
+```
+
+
+
+
+example
+```{r}
+slog<-as.ts(read.csv("testdata/logistic-x.csv",F))
+train<-1:900
+y<-as.zoo(slog)
+
+y<-as.zoo(slog)
+x1<-Lag(y,k=1)
+x2<-Lag(y,k=2)
+x3<-Lag(y,k=3)
+x4<-Lag(y,k=4)
+x5<-Lag(y,k=5)
+x6<-Lag(y,k=6)
+x7<-Lag(y,k=7)
+x8<-Lag(y,k=8)
+x9<-Lag(y,k=9)
+x10<-Lag(y,k=10)
+slog<-cbind(y,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)
+
+slog<-slog[-(1:10),]
+inputs<-slog[,2:11]
+outputs<-slog[,1]
+
+fit<-elman(inputs[train],
+    outputs[train],
+    size=c(3,2),
+    learnFuncParams=c(0.1),
+    maxit=5000)
+plotIterativeError(fit)
+y<-as.vector(outputs[-train])
+plot(y,type="l")
+
+pred<-predict(fit,inputs[-train])
+lines(pred,col="red")
+
+fit<-jordan(inputs[train],
+    outputs[train],
+    size=4,
+    learnFuncParams=c(0.01),
+    maxit=5000)
+
+pred<-predict(fit,inputs[-train])
+plot(y,type="l")
+lines(pred,col="red")
+
+```
+
+
+```{r}
+png("nplot1.png",height=960, width=960, res=144)
+par(mfrow= c(3,3))
+for (i in 1:7){
+real <- y1[183:229,i]
+pre <- fire.pred1[,i]
+matplot(cbind(real, pre),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main=rownames(aus.fire)[i], type="l",
+      xaxt="n",ylim=c(-100000,400000))
+xvalues <- c(1,13,25,37)
+xstrings <- c(2016,2017,2018,2019)
+axis(side=1,　# X軸に挿入。Y軸はside=2 
+     at=xvalues, # 上記で作成したxvaluesを利用。
+     labels=xstrings)
+}
+dev.off()
+
+png("nplot2.png",height=960, width=960, res=144)
+par(mfrow= c(3,3))
+for (i in 1:7){
+real <- y2[183:228,i]
+pre <- fire.pred2[,i]
+matplot(cbind(real, pre),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main=rownames(aus.fire)[i], type="l",      xaxt="n",ylim=c(-100000,400000))
+xvalues <- c(1,13,25,37)
+xstrings <- c(2016,2017,2018,2019)
+axis(side=1,　# X軸に挿入。Y軸はside=2 
+     at=xvalues, # 上記で作成したxvaluesを利用。
+     labels=xstrings)
+}
+dev.off()
+
+png("nplot3.png",height=960, width=960, res=144)
+par(mfrow= c(3,3))
+for (i in 1:7){
+real <- y3[183:227,i]
+pre <- fire.pred3[,i]
+matplot(cbind(real, pre),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main=rownames(aus.fire)[i], type="l" ,  xaxt="n",ylim=c(-100000,400000))
+xvalues <- c(1,13,25,37)
+xstrings <- c(2016,2017,2018,2019)
+axis(side=1,　# X軸に挿入。Y軸はside=2 
+     at=xvalues, # 上記で作成したxvaluesを利用。
+     labels=xstrings)
+}
+dev.off()
+```
+
+
+
+```{r}
+set.seed(1234)
+
+
+minus = 1
+modelJordan1 <- jordan(X[1:182, 1:7], y1[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred1<-predict(modelJordan1, X[183:230, 1:7])
+jordan.pred1[,1]
+matplot(cbind(y1[183:230-minus,1], jordan.pred1[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+#matplot(cbind(y1[1:182,1], modelJordan1$fitted.values[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+minus = 2
+modelJordan2 <- jordan(X[1:182, 1:7], y2[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred2<-predict(modelJordan2, X[183:230, 1:7])
+jordan.pred2[,1]
+matplot(cbind(y2[183:230-minus,1], jordan.pred2[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+minus = 3
+modelJordan3 <- jordan(X[1:182, 1:7], y3[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred3<-predict(modelJordan3, X[183:230, 1:7])
+jordan.pred3[,1]
+matplot(cbind(y3[183:230-minus,1], jordan.pred3[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+minus = 12
+modelJordan12 <- jordan(X[1:182, 1:7], y12[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred12<-predict(modelJordan12, X[183:230, 1:7])
+jordan.pred12[,1]
+matplot(cbind(y12[183:230-minus,1], jordan.pred12[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+modelJordan1
+png("jSEE.png",height=600, width=1500, res=144)
+par(mfrow=c(1,3))
+plotIterativeError(modelJordan1)
+plotIterativeError(modelJordan2)
+plotIterativeError(modelJordan3)
+dev.off()
+
+```
+```{r}
+png("jplot1.png",height=960, width=960, res=144)
+par(mfrow= c(3,3))
+for (i in 1:7){
+real <- y1[183:229,i]
+pre <- jordan.pred1[,i]
+matplot(cbind(real, pre),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main=rownames(aus.fire)[i], type="l" ,xaxt="n",ylim=c(-100000,400000))
+xvalues <- c(1,13,25,37)
+xstrings <- c(2016,2017,2018,2019)
+axis(side=1,　# X軸に挿入。Y軸はside=2 
+     at=xvalues, # 上記で作成したxvaluesを利用。
+     labels=xstrings)
+}
+dev.off()
+
+png("jplot2.png",height=960, width=960, res=144)
+par(mfrow= c(3,3))
+for (i in 1:7){
+real <- y2[183:228,i]
+pre <- jordan.pred2[,i]
+matplot(cbind(real, pre),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main=rownames(aus.fire)[i], type="l",      xaxt="n",ylim=c(-100000,400000))
+xvalues <- c(1,13,25,37)
+xstrings <- c(2016,2017,2018,2019)
+axis(side=1,　# X軸に挿入。Y軸はside=2 
+     at=xvalues, # 上記で作成したxvaluesを利用。
+     labels=xstrings)
+}
+dev.off()
+
+png("jplot3.png",height=960, width=960, res=144)
+par(mfrow= c(3,3))
+for (i in 1:7){
+real <- y3[183:227,i]
+pre <- jordan.pred3[,i]
+matplot(cbind(real, pre),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main=rownames(aus.fire)[i], type="l",      xaxt="n",ylim=c(-100000,400000))
+xvalues <- c(1,13,25,37)
+xstrings <- c(2016,2017,2018,2019)
+axis(side=1,　# X軸に挿入。Y軸はside=2 
+     at=xvalues, # 上記で作成したxvaluesを利用。
+     labels=xstrings)
+}
+dev.off()
+```
+
+make a nrmse table
+```{r}
+result_nnet <- data.frame(matrix(nrow = 7, ncol = 4))
+numb <- c(1,2,3,12)
+
+for(i in 1:4)
+  {
+  wr = paste('fire.pred',numb[i],sep="")
+  replac<-try(eval(parse(text=wr)))
+  yyay = paste('y',numb[i],sep="")
+  ryay <-try(eval(parse(text=yyay)))
+  rown<- 230-numb[i]
+  rownp<-48-numb[i]
+for(j in 1:7)
+{
+      nmse = nrmse(replac[1:rownp,j], ryay[183:rown,j], na.rm=TRUE, norm="sd")/100
+      result_nnet[j,i]=nmse
+}
+}
+rownames(result_nnet)<-rownames(aus.fire)
+colnames(result_nnet)<-c('nnet_lag1','nnet_lag2','nnet_lag3','nnet_lag12')
+result_nnet<- data.frame(t(result_nnet))
+result_nnet
+
+```
+
+
+
+```{r}
+
+numb <- c(1,2,3,12)
+result <- data.frame(matrix(nrow = 7, ncol = 4))
+for(i in 1:4)
+  {
+  wr = paste('jordan.pred',numb[i],sep="")
+  replac<-try(eval(parse(text=wr)))
+  yyay = paste('y',numb[i],sep="")
+  ryay <-try(eval(parse(text=yyay)))
+  rown<- 230-numb[i]
+  rownp<-48-numb[i]
+  
+for(j in 1:7)
+    {
+      nmse = nrmse(replac[1:rownp,j], ryay[183:rown,j], na.rm=TRUE, norm="sd")/100
+      result[j,i]=nmse
+       
+}
+}
+rownames(result)<-rownames(aus.fire)
+colnames(result)<-c('Jordan_lag1','Jordan_lag2','Jordan_lag3','Jordan_lag12')
+result<- data.frame(t(result))
+result
+
+result0 <- rbind(result_nnet,result)
+result0
+```
+```{r}
+#install.packages('formattable')
+library(formattable)
+```
+```{r}
+coln <- list(colnames(result0))
+
+formattable(result0,list(
+    NT = color_tile("tomato","transparent"),
+    Q = color_tile("tomato","transparent"),
+    SA = color_tile("tomato","transparent"),
+    T = color_tile("tomato","transparent"),
+    V = color_tile("tomato","transparent"),
+    WA = color_tile("tomato","transparent"),
+    NSW = color_tile("tomato","transparent")))
+
+
+formattable(result_nnet,
+            list(area(col = NT:NSW) ~color_tile("steelblue","transparent")))
+
+```
+
+#apply space weight 1
+
+```{r}
+#read and prepare spacial weight matrics
+set.seed(1234)
+aus.fire<-read.csv('burnt_area_states_updated.csv')
+space_weight <- read.csv('space_weight2.csv')
+is.numeric(aus.fire)
+rownames(aus.fire) <- aus.fire[,"X"]
+rownames(space_weight) <- space_weight[,"X"]
+aus.fire <- aus.fire[,-1]
+space_weight <- space_weight[,-1]
+name_col <-data.matrix (colnames(aus.fire))
+aus.firet <- t(as.matrix(aus.fire))
+colnames(aus.firet)
+space_weight
+```
+```{r}
+#apply weight matrics to the data
+x_input <- data.frame(matrix(nrow = 230, ncol = 7))
+colnames(x_input) <- colnames(aus.firet)
+states <- colnames(x_input)
+for(j in states)
+for (i in 1:230){
+    wei<- space_weight[,j]
+  ft <- aus.firet[i,]
+  ti <- aus.firet[i,j]
+  mmm <- wei*ft
+  ans <- sum(mmm)*ti
+  x_input[i,j] <- ans
+}
+X<-x_input
+```
+```{r}
+fire.nnet1 <- nnet(X[1:182, 1:7], y[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred1<-predict(fire.nnet1, y[183:228, 1:7])
+fire.pred1[,1]
+matplot(cbind(y[183:228,1], fire.pred1[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+fire.nnet2 <- nnet(X[1:182, 1:7], y2[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred2<-predict(fire.nnet2, y2[183:228, 1:7])
+fire.pred2[,1]
+matplot(cbind(y[183:228,1], fire.pred2[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+fire.nnet3 <- nnet(X[1:182, 1:7], y3[1:182, 1:7], decay=5e-6, linout = TRUE, size=7)
+fire.pred3<-predict(fire.nnet3, y3[183:228, 1:7])
+fire.pred3[,1]
+matplot(cbind(y3[183:228,1], fire.pred3[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+```
+```{r}
+set.seed(1234)
+modelJordan1 <- jordan(X[1:182, 1:7], y[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred1<-predict(modelJordan1, y[183:228, 1:7])
+jordan.pred1[,1]
+matplot(cbind(y[183:228,1], jordan.pred1[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+modelJordan2 <- jordan(X[1:182, 1:7], y2[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred2<-predict(modelJordan2, y2[183:228, 1:7])
+jordan.pred2[,1]
+matplot(cbind(y[183:228,1], jordan.pred2[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+modelJordan3 <- jordan(X[1:182, 1:7], y3[1:182, 1:7],
+  size=c(7), learnFuncParams=c(0.1), maxit=1000,linOut=TRUE)
+jordan.pred3<-predict(modelJordan3, y3[183:228, 1:7])
+jordan.pred3[,1]
+matplot(cbind(y[183:228,1], jordan.pred3[,1]),ylab="Monthly forest fire pixcel", xlab="Time (in months)", main="NT", type="l")
+
+modelJordan1
+par(mfrow=c(1,2))
+plotIterativeError(modelJordan1)
+plotIterativeError(modelJordan2)
+```
+```{r}
+
+##nrmse
+result_nnet <- data.frame(matrix(nrow = 7, ncol = 3))
+for(i in 1:3)
+  {
+  wr = paste('fire.pred',i,sep="")
+  wr
+  replac<-try(eval(parse(text=wr)))
+for(j in 1:7)
+    {
+      nmse = nrmse(replac[,j], y[183:228,j], na.rm=TRUE, norm="sd")/100
+      result_nnet[j,i]=nmse
+       
+}
+}
+rownames(result_nnet)<-rownames(aus.fire)
+colnames(result_nnet)<-c('nnet_lag1','nnet_lag2','nnet_lag3')
+result_nnet<- data.frame(t(result_nnet))
+result_nnet
+
+result <- data.frame(matrix(nrow = 7, ncol = 3))
+for(i in 1:3)
+  {
+  wr = paste('jordan.pred',i,sep="")
+  wr
+  replac<-try(eval(parse(text=wr)))
+for(j in 1:7)
+    {
+      nmse = nrmse(replac[,j], y[183:228,j], na.rm=TRUE, norm="sd")/100
+      result[j,i]=nmse
+       
+}
+}
+rownames(result)<-rownames(aus.fire)
+colnames(result)<-c('Jordan_lag1','Jordan_lag2','Jordan_lag3')
+result<- data.frame(t(result))
+result
+
+result0 <- rbind(result_nnet,result)
+result0 <- data.frame(result0)
+write.table(result0, "result_m1.csv",sep=",", quote=F, 
+             col.names=T, append=T)
+```
+
+```{r}
+numb <- c(1,2,3,12)
+
+for (j in 1:2){
+for (n in 1:4){
+
+modelname = paste(modellist[j],numb[n],'$fitted.values[,i]',sep="")
+mn <-try(eval(parse(text=modelname)))
+prename = paste(prelist[j],numb[n],'[,i]',sep="")
+pn<- try(eval(parse(text=prename)))
+filename = paste(modellist[j],numb[n],sep="")
+fn <- try(eval(parse(text=filename)))
+yyy = paste('y',numb[n],sep="")
+yyyy <- try(eval(parse(text=yyy)))
+
+
+for(i in 1:7){
+fitted2<-mn
+length(fitted2)
+prediction2<-pn
+length(prediction2)
+all<-c(fitted2,prediction2)
+rown<- 230-numb[n]
+length(yyyy[,i])
+all_m<-cbind(yyyy[,i],all[1:rown])
+length(all_m)
+ymax<-max(all_m) 
+colnames(all_m)<- c('real', 'model')
+rownames(all_m) <- 1:rown
+all_line <- melt(all_m)
+colnames(all_line)<- c('year','legend', 'Monthly_forest_fire_pixcel')
+
+wwr = paste('"',filename,colnames(y1)[i],'.png"',sep="")
+replac<-try(eval(parse(text=wwr))) 
+tit = paste('"',filename,'_',colnames(y1)[i],'"',sep="")
+repti<-try(eval(parse(text=tit)))
+
+mylist <- c(1,13-n)
+for (mmm in 1:18){
+  mylist[2+mmm]<- 13-n+12*mmm
+}
+mylist
+
+ggplot() + 
+    geom_rect(data = rects, aes(xmin = xstart, xmax = xend, ymin = -Inf, ymax = Inf), alpha = 0.4) + 
+    geom_text(data = rects, aes(x= (xstart+xend)/2, y=ymax/1.1, label = 'Test')) +
+    geom_line(data = all_line, aes(x = year, y = Monthly_forest_fire_pixcel, col=legend)) +
+    ggtitle(repti) +
+    xlab("year")+ ylab("Monthly forest fire pixcel")+
+    scale_color_manual(values = c("#00001c", "#ed1a3d"))+
+    scale_x_continuous(breaks = mylist,
+                     labels=c(2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020))
+ggsave(replac,dpi = 250, width = 8, height = 4)
+
+}}}
+```
